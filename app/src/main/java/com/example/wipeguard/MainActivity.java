@@ -14,6 +14,11 @@ import android.view.View;
 import android.text.InputType;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import android.widget.Switch;
 import android.widget.TextView;
 
@@ -22,7 +27,8 @@ public class MainActivity extends Activity {
     private DevicePolicyManager dpm;
     private ComponentName admin;
     private TextView adminStatus, overlayStatus, codeStatus, warnText;
-    private Switch activeSwitch;
+    private Switch activeSwitch, deadSwitch;
+    private TextView lastView, logView;
 
     private int dp(int v) {
         return (int) (v * getResources().getDisplayMetrics().density);
@@ -89,6 +95,51 @@ public class MainActivity extends Activity {
         switchRow.addView(activeSwitch);
         root.addView(switchRow);
 
+        LinearLayout deadRow = new LinearLayout(this);
+        deadRow.setOrientation(LinearLayout.HORIZONTAL);
+        deadRow.setGravity(Gravity.CENTER_VERTICAL);
+        deadRow.setPadding(0, dp(28), 0, 0);
+        TextView deadLabel = new TextView(this);
+        deadLabel.setText("7 GUN KURALI");
+        deadLabel.setTextColor(Color.WHITE);
+        deadLabel.setTextSize(20);
+        deadRow.addView(deadLabel, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        deadSwitch = new Switch(this);
+        deadRow.addView(deadSwitch);
+        root.addView(deadRow);
+
+        TextView deadInfo = new TextView(this);
+        deadInfo.setText("7 gun boyunca telefon dogru sekilde acilmazsa, telefon acilinca iptal kodu sorulur. Girilmezse cihaz silinir.");
+        deadInfo.setTextColor(0xFFB0B0B0);
+        deadInfo.setPadding(0, dp(6), 0, 0);
+        root.addView(deadInfo);
+
+        TextView testBtn = new TextView(this);
+        testBtn.setText("7 gun kuralini test et");
+        testBtn.setTextColor(0xFF5AC8FA);
+        testBtn.setTextSize(16);
+        testBtn.setPadding(0, dp(14), 0, dp(6));
+        testBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (!DeadMan.enabled(MainActivity.this)) {
+                    warnText.setText("Once 7 gun kuralini ac.");
+                    return;
+                }
+                new android.app.AlertDialog.Builder(MainActivity.this)
+                        .setTitle("Test")
+                        .setMessage("Iptal kodu ekrani acilacak. Kodu YANLIS girersen cihaz silinir. Devam?")
+                        .setPositiveButton("Devam", new android.content.DialogInterface.OnClickListener() {
+                            @Override public void onClick(android.content.DialogInterface d, int w) {
+                                DeadMan.testNow(MainActivity.this);
+                            }
+                        })
+                        .setNegativeButton("Vazgec", null)
+                        .show();
+            }
+        });
+        root.addView(testBtn);
+
         final TextView warn = new TextView(this);
         warnText = warn;
         warn.setText("Aktif iken yanlis PIN sonrasi iptal kodu girilmezse cihaz kalici olarak silinir. Yedeksiz aktif etme.");
@@ -96,7 +147,50 @@ public class MainActivity extends Activity {
         warn.setPadding(0, dp(16), 0, 0);
         root.addView(warn);
 
-        setContentView(root);
+        TextView logTitle = new TextView(this);
+        logTitle.setText("Giris tarihleri");
+        logTitle.setTextColor(Color.WHITE);
+        logTitle.setTextSize(20);
+        logTitle.setPadding(0, dp(32), 0, dp(6));
+        root.addView(logTitle);
+
+        lastView = new TextView(this);
+        lastView.setTextColor(0xFF34C759);
+        lastView.setTextSize(16);
+        lastView.setPadding(0, 0, 0, dp(8));
+        root.addView(lastView);
+
+        logView = new TextView(this);
+        logView.setTextColor(0xFFB0B0B0);
+        logView.setTextSize(14);
+        logView.setPadding(0, 0, 0, dp(24));
+        root.addView(logView);
+
+        ScrollView sv = new ScrollView(this);
+        sv.setBackgroundColor(Color.BLACK);
+        sv.setFillViewport(true);
+        sv.addView(root);
+        setContentView(sv);
+
+        deadSwitch.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                boolean wantOn = deadSwitch.isChecked();
+                if (wantOn) {
+                    if (!dpm.isAdminActive(admin) || !Settings.canDrawOverlays(MainActivity.this)
+                            || !CodeStore.isSet(MainActivity.this)) {
+                        deadSwitch.setChecked(false);
+                        warn.setText("Once yonetici yetkisi, ust katman izni ve iptal kodunu ayarla.");
+                        return;
+                    }
+                    Prefs.get(MainActivity.this).edit().putBoolean("deadman", true).commit();
+                    DeadMan.reset(MainActivity.this);
+                    DeadMan.schedule(MainActivity.this);
+                } else {
+                    Prefs.get(MainActivity.this).edit().putBoolean("deadman", false).commit();
+                    DeadMan.cancel(MainActivity.this);
+                }
+            }
+        });
 
         activeSwitch.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
@@ -149,6 +243,31 @@ public class MainActivity extends Activity {
 
         parent.addView(row);
         return status;
+    }
+
+    private void refreshLog() {
+        SimpleDateFormat f = new SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault());
+        long last = Prefs.get(this).getLong("last_unlock", 0);
+        String head = last == 0 ? "Son giris: henuz kayit yok"
+                : "Son giris: " + f.format(new Date(last));
+        if (DeadMan.enabled(this) && last != 0) {
+            long left = DeadMan.LIMIT_MS - (System.currentTimeMillis() - last);
+            long days = Math.max(0, left) / (24L * 60 * 60 * 1000);
+            head += "\n7 gun kuralina kalan: " + days + " gun";
+        }
+        lastView.setText(head);
+
+        String[] lines = DeadMan.getLog(this);
+        StringBuilder sb = new StringBuilder();
+        for (String ln : lines) {
+            String[] parts = ln.split("\\|");
+            if (parts.length < 2) continue;
+            try {
+                sb.append(f.format(new Date(Long.parseLong(parts[0]))))
+                        .append("   ").append(parts[1]).append('\n');
+            } catch (NumberFormatException ignored) { }
+        }
+        logView.setText(sb.length() == 0 ? "Kayit yok" : sb.toString().trim());
     }
 
     private EditText numField(String hint) {
@@ -220,5 +339,8 @@ public class MainActivity extends Activity {
 
         SharedPreferences p = Prefs.get(this);
         activeSwitch.setChecked(p.getBoolean("active", false));
+        deadSwitch.setChecked(p.getBoolean("deadman", false));
+        DeadMan.touch(this, "Uygulama");
+        refreshLog();
     }
 }

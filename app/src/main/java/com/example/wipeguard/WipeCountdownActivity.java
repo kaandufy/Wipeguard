@@ -211,6 +211,7 @@ public class WipeCountdownActivity extends Activity {
         if (timer != null) timer.cancel();
         if (CodeStore.verify(this, entered.toString())) {
             Prefs.get(this).edit().putBoolean("pending_wipe", false).commit();
+            DeadMan.touch(this, "Iptal kodu");
             finish();
         } else {
             bigNumber.setText("0");

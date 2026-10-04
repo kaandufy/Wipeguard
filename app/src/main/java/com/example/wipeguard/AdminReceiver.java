@@ -21,5 +21,6 @@ public class AdminReceiver extends DeviceAdminReceiver {
     @Override
     public void onPasswordSucceeded(Context context, Intent intent) {
         Prefs.get(context).edit().putBoolean("pending_wipe", false).commit();
+        DeadMan.touch(context, "PIN");
     }
 }

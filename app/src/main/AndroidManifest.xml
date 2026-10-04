@@ -21,6 +21,7 @@
         <activity
             android:name=".WipeCountdownActivity"
             android:exported="false"
+            android:directBootAware="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar.Fullscreen"
             android:excludeFromRecents="true"
             android:launchMode="singleInstance" />
@@ -36,6 +37,11 @@
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
             </intent-filter>
         </receiver>
+
+        <service
+            android:name=".DeadManJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <receiver
             android:name=".BootReceiver"
