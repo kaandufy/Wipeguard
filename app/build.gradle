@@ -1,0 +1,34 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.example.wipeguard'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.example.wipeguard"
+        minSdk 26
+        targetSdk 30
+        versionCode 1
+        versionName "1.1"
+    }
+
+    buildTypes {
+        release {
+            debuggable false
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
